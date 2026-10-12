@@ -56,3 +56,5 @@ Codex 显示的 token 使用量为 0，是网关没有 Kiro token 计数时的�
 桌面报 502 时，直连认证 Responses auto 请求返回 HTTP200/KIRO_OK；强制通过 127.0.0.1:7890 代理访问本地 health 返回502。原网关日志无桌面请求，说明代理路径是明确嫌疑。新增仅设置 NO_PROXY/no_proxy 的启动脚本，不修改系统代理。桌面验证待重启后完成。
 
 用户确认使用 NO_PROXY/no_proxy 启动脚本后桌面 Kiro 调用成功。桌面启动与基本文本调用通过；不将此结果扩展为所有模型推理、原厂能力或复杂长任务均已通过。
+
+工具循环根因已查证：受影响会话中 mcp__cua_repl.js 调用了29次，Codex 每次返回 unsupported call。mapTools 将所有 namespace 回映射成 namespace.tool，MCP namespace 实际需要 mcp__server__tool 格式。修正仅 MCP 前缀命名空间，保留普通命名空间的点号路由；新增回归测试。

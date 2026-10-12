@@ -192,3 +192,13 @@ test('history includes exact MCP routing for namespaced tools and failure recove
   assert.match(text, /"client":"computer.inspect","mcp":"computer__inspect"/);
   assert.match(text, /do not repeat the same failed call/);
 });
+
+
+test('MCP namespaces retain Codex double-underscore route names', () => {
+  const tools = mapTools([{ type: 'namespace', name: 'mcp__cua_repl', tools: [
+    { type: 'function', name: 'js', parameters: { type: 'object', properties: {} } },
+  ] }]);
+  const tool = tools.get('mcp__cua_repl__js');
+  assert.equal(tool.originalName, 'mcp__cua_repl__js');
+  assert.notEqual(tool.originalName, 'mcp__cua_repl.js');
+});

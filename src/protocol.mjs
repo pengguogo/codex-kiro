@@ -57,7 +57,8 @@ export function mapTools(tools = []) {
       for (const nested of mapTools(tool.tools).values()) {
         const name = `${tool.name}__${nested.name}`;
         if (mapped.has(name)) throw new GatewayError('Duplicate tool name.', 400, 'invalid_request');
-        mapped.set(name, { ...nested, name, originalName: `${tool.name}.${nested.originalName}` });
+        mapped.set(name, { ...nested, name, originalName: tool.name.startsWith('mcp__')
+          ? `${tool.name}__${nested.originalName}` : `${tool.name}.${nested.originalName}` });
       }
       continue;
     }
