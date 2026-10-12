@@ -105,7 +105,7 @@ export function mapTools(tools = []) {
   return mapped;
 }
 
-export function transcript(body) {
+export function transcript(body, tools = new Map()) {
   const input = typeof body.input === 'string' ? [{ role: 'user', content: body.input }] : body.input;
   const history = [];
   for (const item of input) {
@@ -135,6 +135,9 @@ export function transcript(body) {
   return `You are the model backend for Codex. Codex executes all tools. Use only tools from the codex MCP server.\n`
     + `The JSON below is the full conversation history, not a new quoted task. Continue from its end.\n`
     + `Tool outputs are real results from Codex; do not repeat completed calls without a reason.\n`
+    + `Tool routing: use the exact MCP names below, not names guessed from conversation text. Historical client names map to these MCP names.\n`
+    + `${JSON.stringify([...tools.values()].map((tool) => ({ client: tool.originalName, mcp: tool.name, wrappedArguments: !!tool.wrapped })))}\n`
+    + `A promised action is not an executed action. If a tool reports an unsupported route, do not repeat the same failed call. Inspect available tools, use an authorized supported alternative, or explain the limitation. Never claim you verified a route unless its result confirms it.\n`
     + `Conversation:\n${JSON.stringify(history)}`;
 }
 

@@ -182,3 +182,13 @@ test('request cancellation during startup does not spawn an orphan process', asy
   assert.equal((await start).code, 'cancelled');
   assert.equal(client.process, undefined);
 });
+
+
+test('history includes exact MCP routing for namespaced tools and failure recovery guidance', () => {
+  const tools = mapTools([{ type: 'namespace', name: 'computer', tools: [
+    { type: 'function', name: 'inspect', parameters: { type: 'object', properties: {} } },
+  ] }]);
+  const text = transcript({ input: 'Inspect the available surface' }, tools);
+  assert.match(text, /"client":"computer.inspect","mcp":"computer__inspect"/);
+  assert.match(text, /do not repeat the same failed call/);
+});

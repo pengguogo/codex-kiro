@@ -99,7 +99,7 @@ export function createGateway({ key, command = 'kiro-cli', args = ['acp', '--age
       validateRequest(body);
       const tools = mapTools(body.tools);
       if (body.tool_choice === 'none') tools.clear();
-      const prompt = transcript(body);
+      const prompt = transcript(body, tools);
       const requestedModel = body.model || model;
       if (typeof requestedModel !== 'string' || !requestedModel) throw new GatewayError('Invalid model.', 400, 'invalid_request');
       const selectedModel = upstreamModelId(requestedModel);
@@ -159,7 +159,7 @@ export function createGateway({ key, command = 'kiro-cli', args = ['acp', '--age
       done = true;
       await client.stop();
       writer.finish();
-      console.error(`[${requestId}] completed backend=kiro-cli model=${selectedModel} tools=${writer.output.filter((x) => x.type.endsWith('call')).length}`);
+      console.error(`[${requestId}] completed backend=kiro-cli model=${selectedModel} tools=${writer.output.filter((x) => x.type.endsWith('call')).length} tool_names=${JSON.stringify(writer.output.filter((x) => x.type.endsWith('call')).map((x) => x.name))}`);
     } catch (error) {
       console.error(`[${requestId}] failed code=${error.code || 'internal_error'}`);
       if (writer && !res.destroyed) writer.fail(error);
