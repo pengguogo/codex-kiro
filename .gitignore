@@ -1,0 +1,10 @@
+.env
+node_modules/
+*.log
+
+__pycache__/
+*.py[cod]
+.DS_Store
+*.app/
+*.asar
+*.plist

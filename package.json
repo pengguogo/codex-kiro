@@ -1,0 +1,17 @@
+{
+  "name": "codex-kiro",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node src/server.mjs",
+    "test": "node --test test/*.test.mjs",
+    "doctor": "node src/cli.mjs doctor",
+    "codex": "node src/cli.mjs run",
+    "desktop": "node src/desktop.mjs",
+    "test:desktop": "node src/desktop.mjs prepare && node test/desktop-smoke.mjs",
+    "models": "node src/cli.mjs models",
+    "prepare:coexist": "node src/coexist.mjs"
+  }
+}
