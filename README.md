@@ -17,15 +17,16 @@ CLI 使用独立配置；macOS 桌面实验支持 OpenAI / Kiro 模型共存。
 | 读代码、执行命令、修改文件 | Kiro 选择工具，Codex 在自身权限下执行 |
 | 选择 Kiro 模型 | 动态获取当前 CLI 的模型列表 |
 
-**实测状态（2026-10-12）：** CLI 与桌面 Kiro 基本文本调用已跑通，`auto` 工具闭环通过，21 项自动化测试通过。曾发现 21 个 Kiro 选项，数量随账号及服务变化；未逐个验证推理。
+**实测状态（2026-10-13）：** CLI 与桌面 Kiro 基本文本调用已跑通，`auto` 工具闭环通过；`gpt-5.6-sol` 用户图片与工具图片结果已实测。曾发现 21 个 Kiro 选项，数量随账号及服务变化；未逐个验证推理。
 
 ## 快速开始：CLI
 
-准备 **Node.js 22+、Codex CLI、已登录的 Kiro CLI**。无需安装 npm 依赖。
+准备 **Node.js 22+、Codex CLI、已登录的 Kiro CLI**。首次安装需执行 `npm ci`（JSON Schema 校验使用 Ajv）。
 
 ```sh
 git clone git@github.com:pengguogo/codex-kiro.git
 cd codex-kiro
+npm ci
 
 kiro-cli login
 npm run doctor
@@ -130,12 +131,18 @@ sequenceDiagram
 
 | 已支持 | 暂不支持 |
 | :--- | :--- |
-| 文本与 SSE 流式输出 | 图片、音频 |
-| function / namespace / custom 工具 | 内置网页搜索、云端任务 |
-| `apply_patch` 与多轮工具回传 | Responses WebSocket、`previous_response_id` |
-| 超时、断连取消、本地认证 | 结构化最终输出 |
+| 文本、SSE、嵌入图片输入及工具图片结果 | 音频、远程图片 URL / OpenAI file ID |
+| function / namespace / custom / 客户端 tool_search | OpenAI 托管生图、内置网页搜索、云端任务 |
+| `apply_patch`、插件工具发现与多轮工具回传 | Responses WebSocket、`previous_response_id` |
+| 超时、断连取消、本地认证、JSON Schema 最终输出 | 原生约束解码 |
 
 模型出现或切换成功不等于推理权限已验证。复杂长任务仍需验证。usage 未映射，界面显示 0 tokens **不代表 Kiro 免费**；额度请以 Kiro 为准。
+
+### 为什么 Kiro 聊天可能没有生图工具？
+
+网关能转交 Codex 客户端实际提供的工具，包括命名空间里的生图函数；`tool_search` 返回的新插件工具也能继续调用。图片结果会转成真正的 ACP 图片块，供支持图片的 Kiro 模型查看。模型目录开启图片输入和插件使用指引，但目录声明不能给账号或桌面应用增加权限。
+
+OpenAI Responses 的 `image_generation` 是在 OpenAI 服务端执行的托管工具，Kiro CLI 不提供对应生图服务。该类型会明确报错，不会偷偷消耗个人 OpenAI 额度。若桌面应用没有向 Kiro 会话暴露客户端生图函数，需使用自带模型的聊天，或安装自己有权限使用的生图 MCP；网关无法凭空注册桌面内部工具。两种工具的区别与排查步骤见 [工具兼容说明](docs/TOOLS.md)。
 
 ## 文档与参考
 

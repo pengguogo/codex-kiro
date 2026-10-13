@@ -52,9 +52,11 @@ Kiro 通过 MCP 选择工具后，网关结束当前 ACP 进程并返回 Respons
 
 此设计避免保留挂起的工具调用，但每次工具操作会新建 CLI 进程、重传上下文。Codex 的 `instructions` 写入临时 Kiro agent 的系统提示词。ACP 没有 Responses 的原生角色历史接口，历史以角色标注的 JSON 文本传递，语义不等同于原生模型 API。真实模型的连续编辑与工具结果回传已验证；复杂长会话仍需持续验证。工具权限仍由 Codex 控制，不启用 `--trust-all-tools`。
 
-支持：文本、SSE、function 工具、namespace 工具、custom 工具（包括 `apply_patch` 原始输入）、多轮工具结果、超时与断连取消。每轮最多返回一个工具调用。custom grammar 以说明形式提供给 Kiro，不保证语法约束。
+支持：文本、SSE、嵌入图片、function 工具、namespace 工具、custom 工具（包括 `apply_patch` 原始输入）、客户端 tool_search 及其返回的工具定义、多轮工具结果、超时与断连取消。图片从消息或工具结果中提取为真正的 ACP image block；初始化时检查上游能力。每轮最多返回一个工具调用。custom grammar 以说明形式提供给 Kiro，不保证语法约束。详见 [工具兼容](TOOLS.md)。
 
-暂不支持：图片、音频、内置 web search、Responses WebSocket、`previous_response_id`、服务器持久化、后台请求、结构化最终输出。指定 unsupported 功能会报错。reasoning 和 verbosity 参数不映射；加密 reasoning 项丢弃。`max_output_tokens` 未强制执行。usage 为 `null`，不伪造 Kiro 计费量；Codex 可能显示 0 tokens，不能据此判断免费。真实额度请在 Kiro 中核对。
+`text.format` 支持 text、json_object、json_schema。结构化答案先缓冲，JSON 解析和 Ajv schema 校验通过后才输出；不做字段补全、类型转换或替换审批结论。模型未遵循格式时返回 `invalid_structured_output`，与原生约束解码的保证不同。
+
+暂不支持：远程图片 URL / OpenAI file ID、音频、OpenAI 托管生图与内置 web search、Responses WebSocket、`previous_response_id`、服务器持久化、后台请求。指定 unsupported 功能会报错。reasoning 和 verbosity 参数不映射；加密 reasoning 项丢弃。`max_output_tokens` 未强制执行。usage 为 `null`，不伪造 Kiro 计费量；Codex 可能显示 0 tokens，不能据此判断免费。真实额度请在 Kiro 中核对。
 
 `GET /health` 只检查网关存活；它不会证明登录有效或模型能调用。日志仅记录请求 ID、后端、模型、工具次数或错误代码；不记录提示词、工具内容和账号 token。Kiro 自身可能保存会话历史，请遵循公司对 Kiro 的现有使用规则。
 

@@ -3,7 +3,9 @@ import { timingSafeEqual } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import { AcpClient } from './acp.mjs';
 import { discoverModels, modelEnvelope, upstreamModelId } from './models.mjs';
-import { GatewayError, id, mapTools, transcript, validateRequest, ResponseWriter } from './protocol.mjs';
+import { GatewayError, id, validateRequest, ResponseWriter } from './protocol.mjs';
+import { acpPrompt, requestTools } from './media.mjs';
+import { structuredFormat } from './structured.mjs';
 
 function json(res, status, body) {
   res.writeHead(status, { 'Content-Type': 'application/json' });
@@ -97,9 +99,12 @@ export function createGateway({ key, command = 'kiro-cli', args = ['acp', '--age
       if (closed) throw new GatewayError('Server shutting down.', 503);
       const body = await readJson(req);
       validateRequest(body);
-      const tools = mapTools(body.tools);
+      const tools = requestTools(body);
       if (body.tool_choice === 'none') tools.clear();
-      const prompt = transcript(body, tools);
+      const prompt = acpPrompt(body, tools);
+      const format = structuredFormat(body);
+      if (format) prompt[0].text += format.instruction;
+      let bufferedText = '';
       const requestedModel = body.model || model;
       if (typeof requestedModel !== 'string' || !requestedModel) throw new GatewayError('Invalid model.', 400, 'invalid_request');
       const selectedModel = upstreamModelId(requestedModel);
@@ -112,6 +117,7 @@ export function createGateway({ key, command = 'kiro-cli', args = ['acp', '--age
       bridges.set(token, { tools, onTool(tool, args_) {
         if (done) return;
         try {
+          if (format && bufferedText) { writer.text(bufferedText); bufferedText = ''; }
           writer.tool(tool, args_);
           done = true;
           resolveTurn();
@@ -122,7 +128,10 @@ export function createGateway({ key, command = 'kiro-cli', args = ['acp', '--age
         if (!['session/update', 'session/notification', '_kiro.dev/session/update'].includes(msg.method)) return;
         const update = msg.params?.update || msg.params;
         const kind = String(update?.sessionUpdate || update?.type || '').replaceAll('_', '').toLowerCase();
-        if (kind === 'agentmessagechunk' && update.content?.type === 'text') writer.text(update.content.text);
+        if (kind === 'agentmessagechunk' && update.content?.type === 'text') {
+          if (format) bufferedText += update.content.text;
+          else writer.text(update.content.text);
+        }
       }, [...tools.keys()], body.instructions || '');
       active.add(client);
       writer.start();
@@ -131,7 +140,10 @@ export function createGateway({ key, command = 'kiro-cli', args = ['acp', '--age
       onClose = () => { if (!res.writableEnded) rejectTurn(new GatewayError('Client disconnected.', 499, 'cancelled')); };
       res.on('close', onClose);
       const work = (async () => {
-        await client.start();
+        const initialized = await client.start();
+        if (prompt.some((part) => part.type === 'image') && !initialized?.agentCapabilities?.promptCapabilities?.image) {
+          throw new GatewayError('This Kiro ACP engine does not support image input.', 400, 'unsupported_feature');
+        }
         const session = await client.call('session/new', { cwd: client.cwd, mcpServers: tools.size ? [{
           type: 'http', name: 'codex', url: `http://127.0.0.1:${server.address().port}/mcp/${token}`, headers: [],
         }] : [] });
@@ -144,11 +156,12 @@ export function createGateway({ key, command = 'kiro-cli', args = ['acp', '--age
           }
           await client.call('session/set_model', { sessionId: session.sessionId, modelId: selectedModel });
         }
-        const result = await client.call('session/prompt', { sessionId: session.sessionId, prompt: [{ type: 'text', text: prompt }] });
+        const result = await client.call('session/prompt', { sessionId: session.sessionId, prompt });
         if (!done) {
           if (result?.stopReason && result.stopReason !== 'end_turn') {
             throw new GatewayError(`Kiro stopped with ${result.stopReason}.`, 502, 'kiro_stop');
           }
+          if (format) writer.text(format.validateText(bufferedText));
           done = true;
           resolveTurn();
         }
@@ -159,7 +172,7 @@ export function createGateway({ key, command = 'kiro-cli', args = ['acp', '--age
       done = true;
       await client.stop();
       writer.finish();
-      console.error(`[${requestId}] completed backend=kiro-cli model=${selectedModel} tools=${writer.output.filter((x) => x.type.endsWith('call')).length} tool_names=${JSON.stringify(writer.output.filter((x) => x.type.endsWith('call')).map((x) => x.name))}`);
+      console.error(`[${requestId}] completed backend=kiro-cli model=${selectedModel} tools=${writer.output.filter((x) => x.type.endsWith('call')).length} tool_names=${JSON.stringify(writer.output.filter((x) => x.type.endsWith('call')).map((x) => x.type === 'tool_search_call' ? 'tool_search' : [x.namespace, x.name].filter(Boolean).join('.')))}`);
     } catch (error) {
       console.error(`[${requestId}] failed code=${error.code || 'internal_error'}`);
       if (writer && !res.destroyed) writer.fail(error);

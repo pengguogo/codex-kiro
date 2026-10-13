@@ -124,7 +124,7 @@ test('timeout emits failed response and terminates ACP process', async (t) => {
   assert.fail('ACP request leaked after timeout');
 });
 
-test('unsupported image, previous response and tool types fail before upstream call', async (t) => {
+test('unsupported remote image, previous response and hosted tool types fail before upstream call', async (t) => {
   const { post } = await gateway(t);
   for (const body of [
     { input: 'x', previous_response_id: 'resp_old' },

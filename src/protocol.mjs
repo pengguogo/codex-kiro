@@ -18,10 +18,10 @@ export function modelInfo(model) {
     shell_type: 'unified_exec', visibility: 'list', supported_in_api: true, priority: 0,
     availability_nux: null, upgrade: null, support_verbosity: false, default_verbosity: null,
     apply_patch_tool_type: 'freeform', truncation_policy: { mode: 'bytes', limit: 10000 },
-    supports_parallel_tool_calls: false, experimental_supported_tools: [], input_modalities: ['text'],
+    supports_parallel_tool_calls: false, experimental_supported_tools: [], input_modalities: ['text', 'image'],
     supports_reasoning_summary_parameter: false, default_reasoning_summary: 'none',
-    include_skills_usage_instructions: true, include_plugin_usage_instructions: false,
-    include_apps_usage_instructions: false, tool_mode: 'direct' };
+    include_skills_usage_instructions: true, include_plugin_usage_instructions: true,
+    include_apps_usage_instructions: true, supports_search_tool: true, tool_mode: 'direct' };
 }
 
 export function validateRequest(body) {
@@ -37,8 +37,8 @@ export function validateRequest(body) {
   if (body.store === true || body.background === true) {
     throw new GatewayError('Only foreground, stateless requests are supported (store:false).', 400, 'unsupported_feature');
   }
-  if (body.text?.format && body.text.format.type !== 'text') {
-    throw new GatewayError('Structured final response formats are not yet supported.', 400, 'unsupported_feature');
+  if (body.text?.format && !['text', 'json_object', 'json_schema'].includes(body.text.format.type)) {
+    throw new GatewayError('Unknown final response format.', 400, 'unsupported_feature');
   }
   if (body.tool_choice && body.tool_choice !== 'auto' && body.tool_choice !== 'none') {
     throw new GatewayError('Only auto/none tool_choice is supported.', 400, 'unsupported_feature');
@@ -53,6 +53,16 @@ export function mapTools(tools = []) {
   if (!Array.isArray(tools)) throw new GatewayError('tools must be an array.', 400, 'invalid_request');
   const mapped = new Map();
   for (const tool of tools) {
+    if (!tool || typeof tool !== 'object') throw new GatewayError('Invalid tool.', 400, 'invalid_request');
+    if (tool.type === 'tool_search') {
+      if (tool.execution !== 'client') throw new GatewayError('Only client-executed tool_search is supported.', 400, 'unsupported_feature');
+      const name = 'codex_tool_search';
+      if (mapped.has(name)) throw new GatewayError('Duplicate tool name.', 400, 'invalid_request');
+      mapped.set(name, { name, originalName: name, search: true,
+        description: tool.description || 'Discover available Codex tools and plugins. Search before calling a tool that is not currently listed.',
+        inputSchema: tool.parameters || { type: 'object', properties: { query: { type: 'string' }, limit: { type: 'integer', minimum: 1 } }, required: ['query'], additionalProperties: false } });
+      continue;
+    }
     if (tool.type === 'namespace') {
       for (const nested of mapTools(tool.tools).values()) {
         const name = `${tool.name}__${nested.name}`;
@@ -62,7 +72,7 @@ export function mapTools(tools = []) {
       continue;
     }
     if (!['function', 'custom'].includes(tool.type)) {
-      throw new GatewayError(`Unsupported tool type: ${tool.type}. Disable built-in web search.`, 400, 'unsupported_feature');
+      throw new GatewayError(`Unsupported hosted tool type: ${tool.type}. Kiro cannot execute OpenAI-hosted tools; use a client function/MCP tool or an OpenAI chat.`, 400, 'unsupported_feature');
     }
     if (typeof tool.name !== 'string' || !/^[a-zA-Z0-9_.-]{1,128}$/.test(tool.name)) {
       throw new GatewayError('Invalid tool name.', 400, 'invalid_request');
@@ -111,7 +121,11 @@ export function transcript(body, tools = new Map()) {
   for (const item of input) {
     if (!item || typeof item !== 'object') throw new GatewayError('Invalid input item.', 400, 'invalid_request');
     if (item.type === 'reasoning') continue; // OpenAI encrypted items cannot be consumed by Kiro.
-    if (item.type === 'function_call' || item.type === 'custom_tool_call') {
+    if (item.type === 'tool_search_call') {
+      history.push({ role: 'assistant', tool: 'codex_tool_search', call_id: item.call_id, arguments: item.arguments });
+    } else if (item.type === 'tool_search_output') {
+      history.push({ role: 'tool', call_id: item.call_id, status: item.status, tools: item.tools });
+    } else if (item.type === 'function_call' || item.type === 'custom_tool_call') {
       history.push({ role: 'assistant', tool: item.name, call_id: item.call_id,
         namespace: item.namespace, arguments: item.arguments ?? item.input });
     } else if (item.type === 'function_call_output' || item.type === 'custom_tool_call_output') {
@@ -121,7 +135,7 @@ export function transcript(body, tools = new Map()) {
       if (Array.isArray(content)) {
         content = content.map((part) => {
           if (!['input_text', 'output_text', 'text'].includes(part.type)) {
-            throw new GatewayError(`Unsupported content: ${part.type}; this version is text-only.`, 400, 'unsupported_feature');
+            throw new GatewayError(`Unsupported conversation content type: ${part.type}.`, 400, 'unsupported_feature');
           }
           return part.text;
         }).join('\n');
@@ -191,6 +205,15 @@ export class ResponseWriter {
   }
   tool(tool, args) {
     this.finishMessage(true);
+    if (tool.search) {
+      const item = { id: id('tsc'), call_id: id('call'), type: 'tool_search_call',
+        status: 'completed', execution: 'client', arguments: args };
+      const output_index = this.output.length;
+      this.output.push(item);
+      this.event('response.output_item.added', { output_index, item: { ...item, status: 'in_progress' } });
+      this.event('response.output_item.done', { output_index, item });
+      return;
+    }
     if (tool.custom && typeof args.input !== 'string') throw new GatewayError('Custom tool input must be a string.');
     const item = { id: id(tool.custom ? 'ctc' : 'fc'), call_id: id('call'),
       type: tool.custom ? 'custom_tool_call' : 'function_call', status: 'in_progress', name: tool.originalName, ...(tool.namespace ? { namespace: tool.namespace } : {}) };

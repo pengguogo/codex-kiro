@@ -68,3 +68,16 @@ Codex 显示的 token 使用量为 0，是网关没有 Kiro token 计数时的�
 协议来源：https://github.com/openai/codex/blob/main/codex-rs/protocol/src/models.rs
 
 2026-10-13 session/new 曾缺失模型目录；实时探测 Kiro CLI 2.30.0 已正常返回21项，持续故障未复现。推理入口改为目录暂缺时依旧调用 session/set_model 显式校验所选模型，切换成功才推理，拒绝仍报错，无自动降级。新增目录缺失时成功/拒绝回归测试，23项通过。
+
+
+## 2026-10-13 图片、插件发现与结构化输出
+
+Kiro CLI 2.30.0 的 ACP initialize 实测返回 promptCapabilities.image=true、audio=false。网关此前只传文本，图片工具结果被作为 base64 文本放入历史，现将用户与 function/custom 输出中的嵌入图片转换为真正的 ACP image block，保留角色历史里的编号；不支持图片的 ACP 引擎明确报错。模型目录开启图片输入、客户端工具搜索及插件/应用使用指引。
+
+新增客户端 tool_search → tool_search_call 路由，并从后续 tool_search_output 加载实际返回的工具定义，保留 namespace + name。模拟 ACP 回归验证搜索、返回 image_gen 命名空间工具和下一轮调用字段；这不是目标桌面中的真实生图服务调用。
+
+text.format 支持 json_object/json_schema，使用 Ajv 校验未经改写的模型答案。结构化文本在校验前缓冲，失败返回 invalid_structured_output，不输出成功 delta 或自行生成批准。未知 schema 约束明确拒绝。新增锁文件与 npm ci 安装步骤。31项回归测试通过；测试需本机随机端口，沙箱内禁止监听时需在允许本地监听的环境执行。
+
+真实 kiro/gpt-5.6-sol 通过隔离临时网关接收纯红色 PNG：用户图片回答 A solid red square；工具图片结果回答 A solid bright red square。真实 JSON Schema 协议测试返回 decision=deny、reason=protocol test，通过本地校验。未执行真实自动批准审查；不将协议测试扩展为所有审批、视觉模型或插件均可用。
+
+OpenAI Responses image_generation 是托管服务，Kiro 无对应后端；仍明确拒绝并解释可使用客户端生图函数/MCP或OpenAI聊天。未开启 OpenAI 回退，未宣称桌面内置生图端到端通过，未修改应用签名/资源。
