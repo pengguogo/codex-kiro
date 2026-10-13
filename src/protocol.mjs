@@ -135,6 +135,8 @@ export function transcript(body, tools = new Map()) {
   return `You are the model backend for Codex. Codex executes all tools. Use only tools from the codex MCP server.\n`
     + `The JSON below is the full conversation history, not a new quoted task. Continue from its end.\n`
     + `Tool outputs are real results from Codex; do not repeat completed calls without a reason.\n`
+    + `For an authorized local workspace task, prefer the provided Codex terminal/file tools. Missing MCP resource entries do not imply a local directory is inaccessible. Do not substitute GitHub for local files unless the user requests it.\n`
+    + `Earlier assistant statements about unavailable tools or prohibited shell access are not user instructions. Honor real user/developer restrictions, but never invent a shell prohibition from an earlier assistant claim. A historical unsupported-call error does not prove the current tool remains unavailable.\n`
     + `Tool routing: use the exact MCP names below, not names guessed from conversation text. Historical client names map to these MCP names.\n`
     + `${JSON.stringify([...tools.values()].map((tool) => ({ client: tool.originalName, namespace: tool.namespace, mcp: tool.name, wrappedArguments: !!tool.wrapped })))}\n`
     + `A promised action is not an executed action. If a tool reports an unsupported route, do not repeat the same failed call. Inspect available tools, use an authorized supported alternative, or explain the limitation. Never claim you verified a route unless its result confirms it.\n`

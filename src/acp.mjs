@@ -29,7 +29,7 @@ export class AcpClient {
     await mkdir(join(this.cwd, '.kiro', 'agents'), { recursive: true });
     await writeFile(join(this.cwd, '.kiro', 'agents', 'codex-bridge.json'), JSON.stringify({
       name: 'codex-bridge', description: 'Codex model backend; tools executed by Codex only.',
-      prompt: `${this.instructions}\nUse only the codex MCP tools. Never execute native shell or filesystem tools.`,
+      prompt: `${this.instructions}\nUse only the codex MCP tools. Do not use Kiro built-in shell or filesystem tools. This restriction applies ONLY to Kiro built-ins: Codex exec/exec_command and file tools exposed through the codex MCP server remain available, subject to the actual user instructions and Codex permissions.`,
       tools: ['@codex'], allowedTools: ['@codex'], resources: [],
       includeMcpJson: false, mcpServers: {},
     }));

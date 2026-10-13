@@ -214,3 +214,11 @@ test('Responses function calls emit namespace separately for Codex routing', asy
   assert.equal(call.name, 'exec_command');
   assert.equal(call.namespace, 'functions');
 });
+
+
+test('local workspace guidance distinguishes actual restrictions from historical assistant claims', () => {
+  const text = transcript({ input: 'Inspect the local workspace' });
+  assert.match(text, /Missing MCP resource entries do not imply a local directory is inaccessible/);
+  assert.match(text, /Honor real user\/developer restrictions/);
+  assert.match(text, /never invent a shell prohibition/);
+});
