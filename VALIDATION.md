@@ -88,3 +88,10 @@ OpenAI Responses image_generation 是托管服务，Kiro 无对应后端；仍�
 本机主配置实际为 model=kiro/gpt-5.6-sol、默认 provider=OpenAI；桌面日志确认选择 Kiro 会保存全局默认模型。补丁现拦截 Kiro 的 setDefaultModelConfig，返回原有 okOverridden，交由界面已有临时覆盖机制处理。实际方法回归验证 Kiro 不触发全局写入、OpenAI 仍写入。候选准备支持对旧共存补丁增量更新，签名与完整性验证通过；候选尚未安装，真实桌面启动待用户退出应用后执行 upgrade。upgrade 保留最初 restore 基线，并按原始安装备份修复错误的个人默认模型/推理设置。
 
 自动请求即使附带 web_search/web_search_preview，也不再阻断其他客户端工具；不将托管搜索暴露给 Kiro，提示使用实际可用的客户端搜索工具，不冒充联网。强制指定托管搜索仍拒绝。32项回归通过，包含附带搜索与强制搜索的区别、原始回滚以及默认配置精准修复。
+
+
+## 2026-10-13 Custom 工具参数错误恢复
+
+针对 Custom tool input must be a string：MCP 入口验证 custom 参数必须是仅包含字符串 input 的对象；返回 isError 工具结果供 Kiro 纠正，不提前结束 Responses。累计 3 次错误则返回 invalid_tool_arguments 并清理 ACP 进程；不将对象强制序列化为原始工具文本。日志仅含工具名、字段名/类型、尝试次数，不记录值。
+
+34项回归通过。模拟 ACP 覆盖 input 缺失、对象、数字、数组、直接字符串及多余字段后成功纠正；覆盖连续错误次数限制、SSE 失败无无效工具调用、进程清理，以及测试秘密值不进入诊断日志。此结果不保证所有真实模型都能自行纠正，真实错误参数形状需新日志提供证据。

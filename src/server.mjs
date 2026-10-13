@@ -66,8 +66,21 @@ export function createGateway({ key, command = 'kiro-cli', args = ['acp', '--age
           if (!tool) return json(res, 200, { jsonrpc: '2.0', id: rpc.id, error: { code: -32602, message: 'Unknown tool' } });
           const rawArguments = rpc.params.arguments ?? {};
           const arguments_ = tool.wrapped ? rawArguments.arguments : rawArguments;
-          if (!arguments_ || typeof arguments_ !== 'object' || Array.isArray(arguments_)) {
-            return json(res, 200, { jsonrpc: '2.0', id: rpc.id, error: { code: -32602, message: 'Tool arguments must be an object' } });
+          const isObject = arguments_ && typeof arguments_ === 'object' && !Array.isArray(arguments_);
+          if (!isObject || (tool.custom && (typeof arguments_.input !== 'string'
+            || Object.keys(arguments_).some((key) => key !== 'input')))) {
+            bridge.invalidCalls++;
+            const type = (value) => value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value;
+            const fields = isObject ? Object.fromEntries(Object.entries(arguments_).slice(0, 50)
+              .map(([key, value]) => [key.slice(0, 128), type(value)])) : {};
+            console.error(`[${bridge.requestId}] invalid_tool_arguments tool=${JSON.stringify(tool.name)} attempt=${bridge.invalidCalls} shape=${type(arguments_)} fields=${JSON.stringify(fields)}`);
+            const message = tool.custom
+              ? 'Invalid custom tool arguments. Send exactly {"input":"the complete raw tool text"}; input must be a string, with no extra fields. Correct the arguments and retry; do not stringify an object as a substitute.'
+              : 'Invalid tool arguments. Send an object matching the provided input schema and retry.';
+            if (bridge.invalidCalls >= 3) bridge.onInvalidTool(tool);
+            return json(res, 200, { jsonrpc: '2.0', id: rpc.id, result: {
+              isError: true, content: [{ type: 'text', text: message }],
+            } });
           }
           // End this model step at the first tool request. Codex executes it; the next
           // stateless Responses request supplies the result in its full transcript.
@@ -114,7 +127,11 @@ export function createGateway({ key, command = 'kiro-cli', args = ['acp', '--age
       let resolveTurn, rejectTurn;
       const turn = new Promise((resolve, reject) => { resolveTurn = resolve; rejectTurn = reject; });
       token = id('mcp');
-      bridges.set(token, { tools, onTool(tool, args_) {
+      bridges.set(token, { tools, requestId, invalidCalls: 0, onInvalidTool(tool) {
+        if (done) return;
+        done = true;
+        rejectTurn(new GatewayError(`Invalid arguments for ${tool.name} after 3 rejected calls. No invalid tool call was handed to Codex.`, 502, 'invalid_tool_arguments'));
+      }, onTool(tool, args_) {
         if (done) return;
         try {
           if (format && bufferedText) { writer.text(bufferedText); bufferedText = ''; }

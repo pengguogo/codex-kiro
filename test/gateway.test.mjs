@@ -98,6 +98,44 @@ test('custom apply_patch input is preserved with custom_tool_call events', async
   assert.ok(events.some((e) => e.type === 'response.custom_tool_call_input.done'));
 });
 
+test('malformed custom calls are corrected through MCP without ending the Responses turn', async (t) => {
+  const { post } = await gateway(t);
+  const tools = [{ type: 'custom', name: 'apply_patch', format: { type: 'text' } }];
+  for (const kind of ['missing', 'object', 'number', 'array', 'raw', 'extra']) {
+    const response = await post({ input: `CUSTOM_ARGS_FIXTURE:${kind}`, tools });
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.equal(body.status, 'completed');
+    const calls = body.output.filter((item) => item.type === 'custom_tool_call');
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].input, '*** Begin Patch\n*** End Patch');
+  }
+});
+
+test('three malformed calls fail closed and diagnostics omit argument values', async (t) => {
+  const { post, url } = await gateway(t);
+  const logs = [];
+  const original = console.error;
+  console.error = (...args) => logs.push(args.join(' '));
+  try {
+    const response = await post({ input: 'CUSTOM_ARGS_FIXTURE:object EXHAUST', stream: true,
+      tools: [{ type: 'custom', name: 'apply_patch' }] });
+    const text = await response.text();
+    assert.match(text, /invalid_tool_arguments/);
+    assert.match(text, /response.failed/);
+    assert.ok(!text.includes('custom_tool_call'));
+    const rejected = logs.filter((line) => line.includes('invalid_tool_arguments tool='));
+    assert.equal(rejected.length, 3);
+    assert.match(rejected[0], /tool="apply_patch".*fields=\{"input":"object"\}/);
+    assert.ok(!logs.join('\n').includes('DO_NOT_LOG_SECRET'));
+    for (let i = 0; i < 30; i++) {
+      if ((await (await fetch(`${url}/health`)).json()).active_requests === 0) return;
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    assert.fail('Malformed call failure leaked ACP process');
+  } finally { console.error = original; }
+});
+
 test('tool_choice none suppresses MCP tool exposure', async (t) => {
   const { post } = await gateway(t);
   const body = await (await post({ input: 'hello', tool_choice: 'none', tools: [execTool] })).json();

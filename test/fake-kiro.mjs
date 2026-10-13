@@ -46,6 +46,19 @@ createInterface({ input: process.stdin }).on('line', async (line) => {
         options: [{ kind: 'allow_once', optionId: 'yes' }, { kind: 'reject_once', optionId: 'no' }] } });
       return;
     }
+    if (prompt.includes('CUSTOM_ARGS_FIXTURE')) {
+      const listed = await callMcp('tools/list');
+      const tool = listed.result.tools[0];
+      const cases = { missing: {}, object: { input: { private_value: 'DO_NOT_LOG_SECRET' } },
+        number: { input: 42 }, array: [], raw: 'DO_NOT_LOG_SECRET', extra: { input: 'raw', extra: 'DO_NOT_LOG_SECRET' } };
+      const match = /CUSTOM_ARGS_FIXTURE:(\w+)/.exec(prompt);
+      for (let i = 0; i < (prompt.includes('EXHAUST') ? 4 : 1); i++) {
+        const result = await callMcp('tools/call', { name: tool.name, arguments: cases[match?.[1]] || {} });
+        if (!result.result?.isError || !result.result.content[0].text.includes('Correct the arguments')) throw new Error('Invalid arguments did not return a retryable MCP tool error');
+      }
+      await callMcp('tools/call', { name: tool.name, arguments: { input: '*** Begin Patch\n*** End Patch' } });
+      return;
+    }
     const alreadyDone = prompt.includes('"role":"tool"');
     if (mcp && (!alreadyDone || prompt.includes('SEARCH_FIXTURE'))) {
       const listed = await callMcp('tools/list');
