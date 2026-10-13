@@ -6,6 +6,7 @@ This implementation routes kiro/* model IDs on LOCAL thread creation; no auth sp
 """
 import copy
 import hashlib
+import sys
 import json
 from pathlib import Path
 import plistlib
@@ -186,7 +187,7 @@ staged=STATE/'ChatGPT-Kiro-staged.app'
 if not staged.exists():run(['/usr/bin/ditto',str(APP),str(staged)])
 shutil.copyfile(patched,staged/'Contents/Resources/app.asar')
 shutil.copyfile(STATE/'Info-patched.plist',staged/'Contents/Info.plist')
-run(['python3',str(Path(__file__).with_name('local-sign.py')),str(staged)])
+run([sys.executable,str(Path(__file__).with_name('local-sign.py')),str(staged)])
 run(['/usr/bin/codesign','--verify','--deep','--strict',str(staged)])
 _, _, new_hash = read_header(staged/'Contents/Resources/app.asar')
 manifest={'version':info['CFBundleShortVersionString'],'originalHeaderHash':header_hash,'patchedHeaderHash':new_hash,

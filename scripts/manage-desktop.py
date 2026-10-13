@@ -3,6 +3,7 @@
 import argparse
 import datetime
 import hashlib
+import sys
 import json
 import os
 from pathlib import Path
@@ -91,7 +92,7 @@ def restore_config(current, original, catalog):
 def require_app_closed():
     process = subprocess.run(['ps','-axo','pid=,command='],capture_output=True,text=True,check=True)
     running=[line.strip().split(' ',1)[0] for line in process.stdout.splitlines()
-             if str(APP/'Contents')+'/' in line and 'manage-desktop.py' not in line]
+             if any(str(app/'Contents')+'/' in line for app in [APP, STATE/'ChatGPT-Kiro-staged.app']) and 'manage-desktop.py' not in line]
     if running:raise RuntimeError('请先用 ⌘Q 完全退出桌面应用再运行；仍在运行的进程 PID: '+', '.join(running))
 
 def install():
@@ -100,7 +101,7 @@ def install():
     stage=json.loads((STATE/'patch-stage.json').read_text()); staged=Path(stage['stagedApp'])
     if header_hash(APP)!=stage['originalHeaderHash']:raise RuntimeError('应用已更新或变化，需重新准备补丁。')
     if header_hash(staged)!=stage['patchedHeaderHash']:raise RuntimeError('候选归档发生变化。')
-    run(['python3',str(Path(__file__).with_name('local-sign.py')),str(staged),'--check'])
+    run([sys.executable,str(Path(__file__).with_name('local-sign.py')),str(staged),'--check'])
     run(['/usr/bin/codesign','--verify','--deep','--strict',str(staged)])
     original=CONFIG.read_bytes(); candidate=(STATE/'config-candidate.toml').read_text()
     old_settings=tomllib.loads(original.decode())
@@ -153,7 +154,7 @@ def upgrade():
     stage=json.loads((STATE/'patch-stage.json').read_text());staged=Path(stage['stagedApp'])
     if header_hash(APP)!=stage['originalHeaderHash']:raise RuntimeError('当前应用已变化，请重新准备候选。')
     if header_hash(staged)!=stage['patchedHeaderHash']:raise RuntimeError('候选归档发生变化。')
-    run(['python3',str(Path(__file__).with_name('local-sign.py')),str(staged),'--check'])
+    run([sys.executable,str(Path(__file__).with_name('local-sign.py')),str(staged),'--check'])
     run(['/usr/bin/codesign','--verify','--deep','--strict',str(staged)])
     original=CONFIG.read_bytes()
     saved=(Path(manifest['backup'])/'config.toml').read_text()
@@ -208,10 +209,11 @@ def restore():
     print('已撤回 Kiro provider 和本次模型目录；其他设置改动保留。无需退出登录或删除聊天。')
 
 def main():
-    parser=argparse.ArgumentParser();parser.add_argument('action',choices=['install','upgrade','restore','status']);args=parser.parse_args()
+    parser=argparse.ArgumentParser();parser.add_argument('action',choices=['install','upgrade','restore','status','check-closed']);args=parser.parse_args()
     if args.action=='install':install()
     elif args.action=='upgrade':upgrade()
     elif args.action=='restore':restore()
+    elif args.action=='check-closed':require_app_closed()
     else:print('安装状态：',json.loads(MANIFEST.read_text())['status'] if MANIFEST.exists() else 'not installed')
 
 if __name__=='__main__':

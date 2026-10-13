@@ -36,7 +36,7 @@ function providerToml() {
     + `args = [${JSON.stringify(join(root, 'src', 'gateway-token.mjs'))}]\ntimeout_ms = 5000\nrefresh_interval_ms = 300000\n`;
 }
 function validateToml(path) {
-  const result = spawnSync('python3', ['-c', 'import pathlib,tomllib,sys; tomllib.loads(pathlib.Path(sys.argv[1]).read_text())', path], { encoding: 'utf8' });
+  const result = spawnSync(process.env.KIRO_PYTHON || 'python3', ['-c', 'import pathlib,tomllib,sys; tomllib.loads(pathlib.Path(sys.argv[1]).read_text())', path], { encoding: 'utf8' });
   if (result.status !== 0) throw new Error(`Invalid TOML: ${result.stderr}`);
 }
 function replaceMainConfig(content) {
@@ -92,29 +92,41 @@ async function startGateway() {
   throw new Error('Gateway startup failed. Check desktop/gateway.log.');
 }
 
-async function restartGateway() {
-  const key = readFileSync(join(state, 'gateway-key'), 'utf8').trim();
-  const health = await fetch('http://127.0.0.1:8765/health', { signal: AbortSignal.timeout(3000) }).then((res) => res.json());
-  if (health.backend !== 'kiro-cli-acp' || health.active_requests !== 0) throw new Error('网关仍有运行中的请求；请先停止 Kiro 聊天，再运行 restart。');
-  const status = await fetch('http://127.0.0.1:8765/v1/status', { headers: { Authorization: `Bearer ${key}` } });
+export async function restartGateway(force = false, runtime = {}) {
+  const request = runtime.fetch || fetch;
+  const inspect = runtime.spawnSync || spawnSync;
+  const kill = runtime.kill || process.kill.bind(process);
+  const start = runtime.start || startGateway;
+  const pause = runtime.pause || (() => new Promise((resolve_) => setTimeout(resolve_, 100)));
+  const key = runtime.key ?? readFileSync(join(state, 'gateway-key'), 'utf8').trim();
+  let health;
+  try {
+    health = await request('http://127.0.0.1:8765/health', { signal: AbortSignal.timeout(3000) }).then((res) => res.json());
+  } catch (error) {
+    if (error.cause?.code !== 'ECONNREFUSED') throw error;
+    await start();
+    return;
+  }
+  if (health.backend !== 'kiro-cli-acp' || (!force && health.active_requests !== 0)) throw new Error('网关仍有运行中的请求；请先停止 Kiro 聊天，再运行 restart。');
+  const status = await request('http://127.0.0.1:8765/v1/status', { headers: { Authorization: `Bearer ${key}` } });
   if (!status.ok) throw new Error('Gateway authentication failed; refusing restart.');
-  const found = spawnSync('lsof', ['-t', '-iTCP:8765', '-sTCP:LISTEN'], { encoding: 'utf8' });
+  const found = inspect('lsof', ['-t', '-iTCP:8765', '-sTCP:LISTEN'], { encoding: 'utf8' });
   const pid = Number(found.stdout.trim());
   if (!Number.isInteger(pid) || pid <= 0) throw new Error('Cannot identify a unique gateway process.');
-  const inspected = spawnSync('ps', ['-p', String(pid), '-o', 'command='], { encoding: 'utf8' });
+  const inspected = inspect('ps', ['-p', String(pid), '-o', 'command='], { encoding: 'utf8' });
   const command = inspected.stdout.trim();
   const expected = join(root, 'src', 'server.mjs');
   if (inspected.status !== 0 || !/^\S*node /.test(command) || command.slice(command.indexOf(' ') + 1) !== expected) {
     throw new Error('Port 8765 belongs to another process; refusing restart.');
   }
-  process.kill(pid, 'SIGTERM');
+  kill(pid, 'SIGTERM');
   for (let i = 0; i < 50; i++) {
-    try { process.kill(pid, 0); } catch (error) {
+    try { kill(pid, 0); } catch (error) {
       if (error.code !== 'ESRCH') throw error;
-      await startGateway();
+      await start();
       return;
     }
-    await new Promise((resolve_) => setTimeout(resolve_, 100));
+    await pause();
   }
   throw new Error('Gateway has not stopped; no replacement process started.');
 }
@@ -128,7 +140,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
       console.log(JSON.stringify(files, null, 2));
     } else if (action === 'restart') {
       prepareDesktop();
-      await restartGateway();
+      await restartGateway(process.argv.includes('--force'));
       console.log('网关已安全重启。');
     } else if (action === 'enable') {
       throw new Error('Global provider switching is retired. Use scripts/manage-desktop.py install for coexistence.');

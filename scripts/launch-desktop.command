@@ -1,8 +1,7 @@
 #!/bin/zsh
-# Preserve external proxy settings; bypass proxies for this local gateway only.
-kiro_bypass='127.0.0.1,localhost,::1'
-export NO_PROXY="${NO_PROXY:+${NO_PROXY},}${kiro_bypass}"
-export no_proxy="${no_proxy:+${no_proxy},}${kiro_bypass}"
+set -e
 kiro_project_root="$(cd -- "${0:A:h}/.." && pwd)"
-node "$kiro_project_root/src/desktop.mjs" prepare || exit $?
+source "$kiro_project_root/scripts/desktop-env.sh"
+"$KIRO_PYTHON" "$kiro_project_root/scripts/manage-desktop.py" check-closed
+node "$kiro_project_root/src/desktop.mjs" restart --force
 exec /Applications/ChatGPT.app/Contents/MacOS/ChatGPT

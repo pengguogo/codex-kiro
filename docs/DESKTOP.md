@@ -1,3 +1,5 @@
+> 推荐入口：已安装并登录 Kiro CLI、桌面应用，且候选可登录的 Mac，退出应用后运行 `./scripts/install-desktop.command`。日常运行 `./scripts/launch-desktop.command`，回滚运行 `./scripts/rollback-desktop.command`。启动仅替换经过认证和进程路径核验的本项目网关，不自动退出桌面应用。以下保留分步操作用于排查。
+
 # macOS 桌面接入指南
 
 ## macOS 桌面应用：OpenAI / Kiro 共存
@@ -8,7 +10,7 @@
 
 ### 准备候选副本
 
-需要 Python 3.11+、Node.js 22+、Kiro CLI 已登录，以及位于 `/Applications/ChatGPT.app` 的目标桌面应用。Python 仅使用标准库；补丁脚本通过 `npx prettier@3.6.2` 格式化目标 JavaScript，需要首次下载工具。
+需要 Python 3.11+、Node.js 20+、Kiro CLI 已登录，以及位于 `/Applications/ChatGPT.app` 的目标桌面应用。Python 仅使用标准库；补丁脚本通过 `npx prettier@3.6.2` 格式化目标 JavaScript，需要首次下载工具。
 
 在本仓库根目录执行：
 

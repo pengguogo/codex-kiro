@@ -21,7 +21,7 @@ CLI 使用独立配置；macOS 桌面实验支持 OpenAI / Kiro 模型共存。
 
 ## 快速开始：CLI
 
-准备 **Node.js 22+、Codex CLI、已登录的 Kiro CLI**。首次安装需执行 `npm ci`（JSON Schema 校验使用 Ajv）。
+准备 **Node.js 20+、Codex CLI、已登录的 Kiro CLI**。首次安装需执行 `npm ci`（JSON Schema 校验使用 Ajv）。
 
 ```sh
 git clone git@github.com:pengguogo/codex-kiro.git
@@ -54,44 +54,27 @@ flowchart LR
     D --> E[新建本地聊天 · 选择 Kiro]
 ```
 
-**① 准备** · 在仓库根目录执行，额外需要 Python 3.11+：
+其他 Mac 已安装并登录 Kiro CLI 和桌面应用、候选应用也能正常登录时：先用 **⌘Q 退出原应用和候选应用**，然后执行：
 
 ```sh
-node src/desktop.mjs prepare
-node src/coexist.mjs
-python3 scripts/prepare-desktop-patch.py
+git clone https://github.com/pengguogo/codex-kiro.git
+cd codex-kiro
+./scripts/install-desktop.command
 ```
 
-**② 试启动** · ⌘Q 退出原应用后打开候选；此时 Kiro 配置尚未安装：
+需要 **Node.js 20+、Python 3.11+、npm**。缺少依赖时脚本会提示安装命令；首次准备补丁还需联网下载格式化工具。Finder 双击 `.command` 也可运行。
 
-```sh
-open -n "$HOME/.config/codex-kiro/coexist/ChatGPT-Kiro-staged.app"
-```
+| 入口 | 用途 |
+| :--- | :--- |
+| `scripts/install-desktop.command` | 安装依赖、发现模型、准备并校验签名、首次安装或升级、启动 |
+| `scripts/launch-desktop.command` | 日常启动；验证并停止本项目旧网关，再启动新网关和桌面应用 |
+| `scripts/rollback-desktop.command` | 恢复原应用、撤回 Kiro 配置，再打开应用 |
 
-**③ 安装与使用** · 确认候选能启动，⌘Q 退出后执行：
+启动会中断旧网关上的请求；**桌面应用仍在运行时只提示退出，不自动关闭**。端口被其他程序占用、认证不匹配或旧网关无法正常退出时停止操作，不强杀其他进程。请保留仓库目录，配置中的认证命令会引用它。
 
-```sh
-python3 scripts/manage-desktop.py install
-./scripts/launch-desktop.command
-```
+新建**本地聊天** → 选择 **Kiro · Auto** → 发送测试消息。跨 OpenAI / Kiro 切换请新建聊天。脚本自动绕过本地地址的代理。
 
-新建**本地聊天** → 打开模型选择器 → 选择 **Kiro · Auto** → 发送一条测试消息。
-
-跨 OpenAI / Kiro 切换请新建聊天。日常使用启动脚本，它会让本地网关地址绕过代理，避免 `502 Bad Gateway`。
-
-<details>
-<summary>↩️ 需要回滚？</summary>
-
-⌘Q 退出后执行：
-
-```sh
-python3 scripts/manage-desktop.py restore
-open /Applications/ChatGPT.app
-```
-
-原应用和配置备份位于 `~/.config/codex-kiro/coexist/backups/`。回滚保留其他偏好修改；应用已升级时保留新版应用，仅撤回本次配置。
-
-</details>
+重复执行安装脚本会升级补丁，并保留首次安装的回滚基线。备份位于 `~/.config/codex-kiro/coexist/backups/`，升级快照位于 `upgrades/`；回滚保留其他偏好修改。不要复制其他电脑的配置、登录凭据或备份。
 
 完整准备、兼容性及排错步骤见 [桌面接入指南](docs/DESKTOP.md)。
 

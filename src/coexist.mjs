@@ -13,7 +13,7 @@ const mainConfig = join(homedir(), '.codex', 'config.toml');
 mkdirSync(state, { recursive: true, mode: 0o700 });
 const refresh = process.argv.includes('--refresh');
 const original = readFileSync(mainConfig, 'utf8');
-const config = spawnSync('python3', ['-c', 'import json,tomllib,sys; d=tomllib.loads(sys.stdin.read()); print(json.dumps({"provider":d.get("model_provider","openai"),"catalog":d.get("model_catalog_json"),"hasKiro":"kiro" in d.get("model_providers",{})}))'], { input: original, encoding: 'utf8' });
+const config = spawnSync(process.env.KIRO_PYTHON || 'python3', ['-c', 'import json,tomllib,sys; d=tomllib.loads(sys.stdin.read()); print(json.dumps({"provider":d.get("model_provider","openai"),"catalog":d.get("model_catalog_json"),"hasKiro":"kiro" in d.get("model_providers",{})}))'], { input: original, encoding: 'utf8' });
 if (config.status !== 0) throw new Error('Cannot parse personal config');
 const settings = JSON.parse(config.stdout);
 if (!refresh && (settings.provider !== 'openai' || settings.hasKiro)) throw new Error('Expected restored personal configuration with no kiro provider.');
@@ -48,7 +48,7 @@ writeFileSync(join(state, 'config-original.toml'), original, { mode: 0o600 });
 writeFileSync(join(state, 'config-candidate.toml'), candidate, { mode: 0o600 });
 writeFileSync(join(state, 'prepare.json'), JSON.stringify({ configHash: createHash('sha256').update(original).digest('hex'),
   originalModels: bundled.models.length, kiroModels: kiro.length, modelIds: kiro.map((model) => model.id), catalogue: catalog }, null, 2), { mode: 0o600 });
-const check = spawnSync('python3', ['-c', 'import tomllib,sys;from pathlib import Path; a=tomllib.loads(Path(sys.argv[1]).read_text());b=tomllib.loads(Path(sys.argv[2]).read_text());assert a.get("model")==b.get("model");assert a.get("model_provider")==b.get("model_provider"); b.pop("model_catalog_json",None);a.pop("model_catalog_json",None);b["model_providers"].pop("kiro");b.pop("model_providers") if not b["model_providers"] else None;assert a==b', join(state, 'config-original.toml'), join(state, 'config-candidate.toml')], { encoding: 'utf8' });
+const check = spawnSync(process.env.KIRO_PYTHON || 'python3', ['-c', 'import tomllib,sys;from pathlib import Path; a=tomllib.loads(Path(sys.argv[1]).read_text());b=tomllib.loads(Path(sys.argv[2]).read_text());assert a.get("model")==b.get("model");assert a.get("model_provider")==b.get("model_provider"); b.pop("model_catalog_json",None);a.pop("model_catalog_json",None);b["model_providers"].pop("kiro");b.pop("model_providers") if not b["model_providers"] else None;assert a==b', join(state, 'config-original.toml'), join(state, 'config-candidate.toml')], { encoding: 'utf8' });
 if (check.status !== 0) throw new Error(`Candidate changes unrelated settings: ${check.stderr}`);
 console.log(`Prepared ${bundled.models.length} original models + ${kiro.length} Kiro entries. Personal defaults preserved. Main config NOT changed.`);
 console.log(state);

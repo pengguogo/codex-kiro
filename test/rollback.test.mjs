@@ -33,3 +33,20 @@ print('rollback passed')
   assert.equal(result.status,0,result.stderr);
   assert.match(result.stdout,/rollback passed/);
 });
+
+test('desktop preflight rejects both installed and candidate app before mutation', () => {
+  const script = `
+import importlib.util,sys
+from types import SimpleNamespace
+spec=importlib.util.spec_from_file_location('installer',sys.argv[1]);m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+for app in [m.APP,m.STATE/'ChatGPT-Kiro-staged.app']:
+    m.subprocess.run=lambda *a,**k:SimpleNamespace(stdout='123 '+str(app/'Contents/MacOS/ChatGPT')+'\\n')
+    try:m.require_app_closed()
+    except RuntimeError as error:assert '⌘Q' in str(error)
+    else:raise AssertionError('running app not detected')
+m.subprocess.run=lambda *a,**k:SimpleNamespace(stdout='456 /usr/local/bin/node /other/server.mjs\\n')
+m.require_app_closed()
+`;
+  const result = spawnSync('python3', ['-c', script, resolve('scripts/manage-desktop.py')], { encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+});
