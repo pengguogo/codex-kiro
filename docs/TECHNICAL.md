@@ -56,7 +56,7 @@ Kiro 通过 MCP 选择工具后，网关结束当前 ACP 进程并返回 Respons
 
 `text.format` 支持 text、json_object、json_schema。结构化答案先缓冲，JSON 解析和 Ajv schema 校验通过后才输出；不做字段补全、类型转换或替换审批结论。模型未遵循格式时返回 `invalid_structured_output`，与原生约束解码的保证不同。
 
-暂不支持：远程图片 URL / OpenAI file ID、音频、OpenAI 托管生图与内置 web search、Responses WebSocket、`previous_response_id`、服务器持久化、后台请求。指定 unsupported 功能会报错。reasoning 和 verbosity 参数不映射；加密 reasoning 项丢弃。`max_output_tokens` 未强制执行。usage 为 `null`，不伪造 Kiro 计费量；Codex 可能显示 0 tokens，不能据此判断免费。真实额度请在 Kiro 中核对。
+暂不支持：远程图片 URL / OpenAI file ID、音频、OpenAI 托管生图与内置 web search、Responses WebSocket、`previous_response_id`、服务器持久化、后台请求。托管网页搜索定义可能由旧聊天附带，自动请求会过滤该定义并提示模型使用实际提供的客户端搜索工具；强制托管搜索仍拒绝。其他 unsupported 功能会报错。reasoning 和 verbosity 参数不映射；加密 reasoning 项丢弃。`max_output_tokens` 未强制执行。usage 为 `null`，不伪造 Kiro 计费量；Codex 可能显示 0 tokens，不能据此判断免费。真实额度请在 Kiro 中核对。
 
 `GET /health` 只检查网关存活；它不会证明登录有效或模型能调用。日志仅记录请求 ID、后端、模型、工具次数或错误代码；不记录提示词、工具内容和账号 token。Kiro 自身可能保存会话历史，请遵循公司对 Kiro 的现有使用规则。
 

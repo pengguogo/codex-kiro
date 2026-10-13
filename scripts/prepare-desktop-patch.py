@@ -85,22 +85,29 @@ function codexKiroRoute(method, params, host) {
   return params;
 }
 '''
-central += '\n' + helper
-central = once(central, '          return e === `config/read`\n            ? this.sendConfigReadRequest(t, n)',
-    '          t = codexKiroRoute(e, t, this.hostId);\n          return e === `config/read`\n            ? this.sendConfigReadRequest(t, n)')
-central = once(central, '        async prewarmThreadStart(e, t) {',
-    '        async prewarmThreadStart(e, t) {\n          e = codexKiroRoute("thread/start", e, this.hostId);')
+if 'codexKiroCoexistV1' not in central:
+    central += '\n' + helper
+    central = once(central, '          return e === `config/read`\n            ? this.sendConfigReadRequest(t, n)',
+        '          t = codexKiroRoute(e, t, this.hostId);\n          return e === `config/read`\n            ? this.sendConfigReadRequest(t, n)')
+    central = once(central, '        async prewarmThreadStart(e, t) {',
+        '        async prewarmThreadStart(e, t) {\n          e = codexKiroRoute("thread/start", e, this.hostId);')
+# Keep Kiro selections in the renderer's existing per-context override, rather
+# than saving a Kiro model under the global OpenAI provider.
+if 'codexKiroDefaultGuard' not in central:
+    central = once(central, '        setDefaultModelConfig(e, t, n) {',
+        '        setDefaultModelConfig(e, t, n) {\n          // codexKiroDefaultGuard\n          if (typeof e === "string" && e.startsWith("kiro/")) return Promise.resolve({status:"okOverridden"});')
 (work/'central.js').write_text(central)
 picker = (work/'picker.js').read_text()
-picker = once(picker, '    sn = function (e, t, n) {\n      let r = () => {', '''    codexKiroConversationId = r,
-    sn = function (e, t, n) {
-      if (typeof e === "string" && typeof je === "string" &&
-          s.get(no, codexKiroConversationId) != null && (s.get(_r, codexKiroConversationId) ?? 0) > 0 &&
-          e.startsWith("kiro/") !== je.startsWith("kiro/")) {
-        s.get(ll).info("OpenAI 与 Kiro 需在新聊天中切换；当前聊天继续使用原 provider。", {id: "codex-kiro-provider-boundary"});
-        return;
-      }
-      let r = () => {''')
+if 'codex-kiro-provider-boundary' not in picker:
+    picker = once(picker, '    sn = function (e, t, n) {\n      let r = () => {', '''    codexKiroConversationId = r,
+        sn = function (e, t, n) {
+          if (typeof e === "string" && typeof je === "string" &&
+              s.get(no, codexKiroConversationId) != null && (s.get(_r, codexKiroConversationId) ?? 0) > 0 &&
+              e.startsWith("kiro/") !== je.startsWith("kiro/")) {
+            s.get(ll).info("OpenAI 与 Kiro 需在新聊天中切换；当前聊天继续使用原 provider。", {id: "codex-kiro-provider-boundary"});
+            return;
+          }
+          let r = () => {''')
 (work/'picker.js').write_text(picker)
 run(['npx', '--yes', 'prettier@3.6.2', '--write', str(work/'central.js'), str(work/'picker.js')])
 for path in [work/'central.js', work/'picker.js']:
@@ -118,6 +125,11 @@ assert.equal(kiro.config.web_search,'disabled');
 console.log('PASS: OpenAI route preserved; Kiro route selected only for new local tasks.');
 '''
 run(['node', '-e', test])
+# Run the actual persistence guard, including its unchanged OpenAI path.
+start = central.index('        setDefaultModelConfig(e, t, n) {')
+end = central.index('\n        onNotification(', start)
+guard_test = 'const assert=require("node:assert/strict");let writes=0;class Client {'+central[start:end]+'};const c=new Client();c.defaultTurnConfig={writeModel:()=>{writes++;return Promise.resolve({status:"ok"});}};Promise.resolve().then(async()=>{assert.equal((await c.setDefaultModelConfig("kiro/auto","none")).status,"okOverridden");assert.equal(writes,0);await c.setDefaultModelConfig("gpt-6.1-sol","high");assert.equal(writes,1);console.log("PASS: Kiro selection never persists an OpenAI global default.");});'
+run(['node', '-e', guard_test])
 # Execute the actual guarded picker callback; syntax checks alone cannot detect TDZ errors.
 picker = (work/'picker.js').read_text()
 start = picker.index('    codexKiroConversationId = r,')

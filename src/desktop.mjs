@@ -92,6 +92,33 @@ async function startGateway() {
   throw new Error('Gateway startup failed. Check desktop/gateway.log.');
 }
 
+async function restartGateway() {
+  const key = readFileSync(join(state, 'gateway-key'), 'utf8').trim();
+  const health = await fetch('http://127.0.0.1:8765/health', { signal: AbortSignal.timeout(3000) }).then((res) => res.json());
+  if (health.backend !== 'kiro-cli-acp' || health.active_requests !== 0) throw new Error('网关仍有运行中的请求；请先停止 Kiro 聊天，再运行 restart。');
+  const status = await fetch('http://127.0.0.1:8765/v1/status', { headers: { Authorization: `Bearer ${key}` } });
+  if (!status.ok) throw new Error('Gateway authentication failed; refusing restart.');
+  const found = spawnSync('lsof', ['-t', '-iTCP:8765', '-sTCP:LISTEN'], { encoding: 'utf8' });
+  const pid = Number(found.stdout.trim());
+  if (!Number.isInteger(pid) || pid <= 0) throw new Error('Cannot identify a unique gateway process.');
+  const inspected = spawnSync('ps', ['-p', String(pid), '-o', 'command='], { encoding: 'utf8' });
+  const command = inspected.stdout.trim();
+  const expected = join(root, 'src', 'server.mjs');
+  if (inspected.status !== 0 || !/^\S*node /.test(command) || command.slice(command.indexOf(' ') + 1) !== expected) {
+    throw new Error('Port 8765 belongs to another process; refusing restart.');
+  }
+  process.kill(pid, 'SIGTERM');
+  for (let i = 0; i < 50; i++) {
+    try { process.kill(pid, 0); } catch (error) {
+      if (error.code !== 'ESRCH') throw error;
+      await startGateway();
+      return;
+    }
+    await new Promise((resolve_) => setTimeout(resolve_, 100));
+  }
+  throw new Error('Gateway has not stopped; no replacement process started.');
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   try {
     const action = process.argv[2] || 'prepare';
@@ -99,6 +126,10 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
       const files = prepareDesktop();
       await startGateway();
       console.log(JSON.stringify(files, null, 2));
+    } else if (action === 'restart') {
+      prepareDesktop();
+      await restartGateway();
+      console.log('网关已安全重启。');
     } else if (action === 'enable') {
       throw new Error('Global provider switching is retired. Use scripts/manage-desktop.py install for coexistence.');
     } else if (action === 'restore') {
@@ -113,6 +144,6 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
       const res = await fetch('http://127.0.0.1:8765/health', { signal: AbortSignal.timeout(1000) });
       console.log(JSON.stringify(await res.json()));
       console.log(`Desktop config applied: ${existsSync(manifestFile)}\nLog: ${join(desktopHome, 'gateway.log')}`);
-    } else throw new Error('Use: prepare | enable | restore | status');
+    } else throw new Error('Use: prepare | restart | restore | status');
   } catch (error) { console.error(error.message); process.exitCode = 1; }
 }

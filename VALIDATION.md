@@ -81,3 +81,10 @@ text.format 支持 json_object/json_schema，使用 Ajv 校验未经改写的模
 真实 kiro/gpt-5.6-sol 通过隔离临时网关接收纯红色 PNG：用户图片回答 A solid red square；工具图片结果回答 A solid bright red square。真实 JSON Schema 协议测试返回 decision=deny、reason=protocol test，通过本地校验。未执行真实自动批准审查；不将协议测试扩展为所有审批、视觉模型或插件均可用。
 
 OpenAI Responses image_generation 是托管服务，Kiro 无对应后端；仍明确拒绝并解释可使用客户端生图函数/MCP或OpenAI聊天。未开启 OpenAI 回退，未宣称桌面内置生图端到端通过，未修改应用签名/资源。
+
+
+## 2026-10-13 默认 Provider 错配与附带网页搜索
+
+本机主配置实际为 model=kiro/gpt-5.6-sol、默认 provider=OpenAI；桌面日志确认选择 Kiro 会保存全局默认模型。补丁现拦截 Kiro 的 setDefaultModelConfig，返回原有 okOverridden，交由界面已有临时覆盖机制处理。实际方法回归验证 Kiro 不触发全局写入、OpenAI 仍写入。候选准备支持对旧共存补丁增量更新，签名与完整性验证通过；候选尚未安装，真实桌面启动待用户退出应用后执行 upgrade。upgrade 保留最初 restore 基线，并按原始安装备份修复错误的个人默认模型/推理设置。
+
+自动请求即使附带 web_search/web_search_preview，也不再阻断其他客户端工具；不将托管搜索暴露给 Kiro，提示使用实际可用的客户端搜索工具，不冒充联网。强制指定托管搜索仍拒绝。32项回归通过，包含附带搜索与强制搜索的区别、原始回滚以及默认配置精准修复。

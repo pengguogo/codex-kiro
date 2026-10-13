@@ -129,12 +129,21 @@ test('unsupported remote image, previous response and hosted tool types fail bef
   for (const body of [
     { input: 'x', previous_response_id: 'resp_old' },
     { input: [{ role: 'user', content: [{ type: 'input_image', image_url: 'x' }] }] },
-    { input: 'x', tools: [{ type: 'web_search' }] },
+    { input: 'x', tools: [{ type: 'image_generation' }] },
   ]) {
     const response = await post(body);
     assert.equal(response.status, 400);
     assert.equal((await response.json()).error.code, 'unsupported_feature');
   }
+});
+
+test('incidental hosted web search does not block client tools, but forced search fails', async (t) => {
+  const { post } = await gateway(t);
+  const response = await post({ input: 'tool', tools: [{ type: 'web_search' }, execTool] });
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).output.find((item) => item.type === 'function_call').name, 'exec_command');
+  const forced = await post({ input: 'search', tools: [{ type: 'web_search' }], tool_choice: { type: 'web_search' } });
+  assert.equal(forced.status, 400);
 });
 
 test('namespace tool names map back; encrypted reasoning is omitted', () => {

@@ -54,6 +54,10 @@ export function mapTools(tools = []) {
   const mapped = new Map();
   for (const tool of tools) {
     if (!tool || typeof tool !== 'object') throw new GatewayError('Invalid tool.', 400, 'invalid_request');
+    // Codex may retain a hosted search descriptor in an existing thread even
+    // when web_search is disabled. It must not block unrelated client tools.
+    // Forced tool choices are still rejected by validateRequest.
+    if (['web_search', 'web_search_preview'].includes(tool.type)) continue;
     if (tool.type === 'tool_search') {
       if (tool.execution !== 'client') throw new GatewayError('Only client-executed tool_search is supported.', 400, 'unsupported_feature');
       const name = 'codex_tool_search';
@@ -147,6 +151,7 @@ export function transcript(body, tools = new Map()) {
     }
   }
   return `You are the model backend for Codex. Codex executes all tools. Use only tools from the codex MCP server.\n`
+    + `OpenAI-hosted web search is unavailable through Kiro. Use an actually provided client browser/search tool when needed; otherwise explain the limitation. Never claim to have searched without a tool result.\n`
     + `The JSON below is the full conversation history, not a new quoted task. Continue from its end.\n`
     + `Tool outputs are real results from Codex; do not repeat completed calls without a reason.\n`
     + `For an authorized local workspace task, prefer the provided Codex terminal/file tools. Missing MCP resource entries do not imply a local directory is inaccessible. Do not substitute GitHub for local files unless the user requests it.\n`

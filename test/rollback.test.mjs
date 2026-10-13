@@ -20,6 +20,13 @@ assert restored['mcp_servers']['original']['command']=='original'
 assert 'kiro' not in restored.get('model_providers',{})
 assert 'model_catalog_json' not in restored
 assert 'model_provider' not in restored
+repaired=tomllib.loads(m.personal_defaults(updated.replace('model_reasoning_effort = "high"','model_reasoning_effort = "none"'),original))
+assert repaired['model']=='gpt-6.1-sol'
+assert repaired['model_reasoning_effort']=='high'
+assert repaired['desktop']['font_size']==18
+assert 'kiro' in repaired['model_providers']
+assert repaired['model_catalog_json']=='/tmp/all-models.json'
+assert m.personal_defaults(original,original)==original
 print('rollback passed')
 `;
   const result=spawnSync('python3',['-c',script,resolve('scripts/manage-desktop.py')],{encoding:'utf8'});

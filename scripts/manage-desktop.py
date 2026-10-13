@@ -135,6 +135,56 @@ def install():
     print('安装成功。个人默认模型/provider 保留；打开桌面应用，新建本地聊天选择 Kiro · 模型。')
     print('原应用和原配置备份：',backup)
 
+def personal_defaults(current, original):
+    parsed=tomllib.loads(current)
+    if parsed.get('model_provider','openai')!='openai' or not str(parsed.get('model','')).startswith('kiro/'):
+        return current
+    saved=tomllib.loads(original)
+    if str(saved.get('model','')).startswith('kiro/'):
+        raise RuntimeError('原始默认模型也为 Kiro，无法自动修复。')
+    changes={key:f'{key} = {json.dumps(saved[key])}' if key in saved else None
+        for key in ['model','model_reasoning_effort']}
+    return change_roots(current,changes)
+
+def upgrade():
+    require_app_closed()
+    if not MANIFEST.exists():raise RuntimeError('尚未安装，请使用 install。')
+    manifest=json.loads(MANIFEST.read_text())
+    stage=json.loads((STATE/'patch-stage.json').read_text());staged=Path(stage['stagedApp'])
+    if header_hash(APP)!=stage['originalHeaderHash']:raise RuntimeError('当前应用已变化，请重新准备候选。')
+    if header_hash(staged)!=stage['patchedHeaderHash']:raise RuntimeError('候选归档发生变化。')
+    run(['python3',str(Path(__file__).with_name('local-sign.py')),str(staged),'--check'])
+    run(['/usr/bin/codesign','--verify','--deep','--strict',str(staged)])
+    original=CONFIG.read_bytes()
+    saved=(Path(manifest['backup'])/'config.toml').read_text()
+    updated=personal_defaults(original.decode(),saved)
+    backup=STATE/'upgrades'/datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%SZ')
+    backup.mkdir(parents=True,mode=0o700)
+    atomic_write(backup/'config.toml',original)
+    atomic_write(backup/'installation.json',json.dumps(manifest,indent=2))
+    temporary=APP.with_name(f'.ChatGPT-kiro-upgrade-{os.getpid()}.app')
+    if temporary.exists():raise RuntimeError('临时升级目录已存在。')
+    run(['/usr/bin/ditto',str(staged),str(temporary)])
+    run(['/usr/bin/codesign','--verify','--deep','--strict',str(temporary)])
+    moved=False
+    try:
+        if CONFIG.read_bytes()!=original:raise RuntimeError('升级期间配置发生变化。')
+        os.replace(APP,backup/'ChatGPT.app');moved=True
+        os.replace(temporary,APP)
+        atomic_write(CONFIG,updated,CONFIG.stat().st_mode&0o777)
+        run(['/usr/bin/codesign','--verify','--deep','--strict',str(APP)])
+        manifest['patchedHeaderHash']=stage['patchedHeaderHash']
+        manifest['lastUpgradeBackup']=str(backup)
+        atomic_write(MANIFEST,json.dumps(manifest,indent=2))
+    except Exception:
+        if moved:
+            if APP.exists():os.replace(APP,backup/'ChatGPT-failed.app')
+            os.replace(backup/'ChatGPT.app',APP)
+        if CONFIG.read_text()==updated:atomic_write(CONFIG,original)
+        raise
+    print('补丁已升级；Kiro 选择不再覆盖个人默认模型。原始 restore 回滚仍可用。')
+    print('升级前副本：',backup)
+
 def restore():
     if not MANIFEST.exists():
         print('没有本次安装记录；无需回滚。');return
@@ -158,8 +208,9 @@ def restore():
     print('已撤回 Kiro provider 和本次模型目录；其他设置改动保留。无需退出登录或删除聊天。')
 
 def main():
-    parser=argparse.ArgumentParser();parser.add_argument('action',choices=['install','restore','status']);args=parser.parse_args()
+    parser=argparse.ArgumentParser();parser.add_argument('action',choices=['install','upgrade','restore','status']);args=parser.parse_args()
     if args.action=='install':install()
+    elif args.action=='upgrade':upgrade()
     elif args.action=='restore':restore()
     else:print('安装状态：',json.loads(MANIFEST.read_text())['status'] if MANIFEST.exists() else 'not installed')
 

@@ -14,6 +14,7 @@
 | --- | --- | --- |
 | 客户端 function，如 `image_gen` namespace 下的 `imagegen` | Codex/插件关联服务 | 按原始 namespace + name 转交；需客户端确实暴露 |
 | Responses `image_generation` | OpenAI 服务端 | 明确拒绝；Kiro 没有该托管服务 |
+| 附带的 `web_search` / `web_search_preview` 定义 | OpenAI 服务端 | 自动请求中不暴露给 Kiro，保留其他客户端工具；强制托管搜索仍报错 |
 | `view_image` 或 MCP 截图返回的嵌入图片 | Codex 读取，Kiro 理解 | 将 `input_image` data URL 转成 ACP image block |
 | 客户端 `tool_search` | Codex | 搜索结果里的工具 schema 在下一轮载入 |
 
@@ -50,3 +51,18 @@ npm test
 OpenAI 托管工具（包括网页搜索、生图）、音频、Responses WebSocket、服务器持久化和后台请求。
 
 JSON Schema 最终输出已接入：将所需格式交给 Kiro，缓冲答案并通过 JSON 解析和 Ajv 校验后才发送。与原生约束解码相比，模型仍可能不遵守格式；失败返回 `invalid_structured_output`。未知 schema 约束明确拒绝，不静默忽略；不做类型转换、补字段或替换审批结论。不会把审查失败自动转换成批准，也不修改 Codex 的权限策略。
+
+## 默认模型错配修复
+
+桌面选择 Kiro 曾将全局 `model` 保存成 `kiro/...`，同时全局 provider 仍为 OpenAI，导致部分请求报 “model is not supported when using Codex with a ChatGPT account”。新版候选保护 `setDefaultModelConfig`：Kiro 选择返回桌面已有的 `okOverridden`，使用界面临时选择，不写入全局默认。
+
+已安装旧补丁的用户，先完全退出桌面，再升级候选：
+
+```sh
+python3 scripts/prepare-desktop-patch.py
+python3 scripts/manage-desktop.py upgrade
+node src/desktop.mjs restart
+./scripts/launch-desktop.command
+```
+
+`upgrade` 根据原始安装备份修复错配的默认模型与推理设置，保留 Kiro provider、模型目录、插件和其他个人设置。原始 `restore` 仍撤回整个共存安装。候选准备不会替换正在运行的应用。
