@@ -57,8 +57,7 @@ export function mapTools(tools = []) {
       for (const nested of mapTools(tool.tools).values()) {
         const name = `${tool.name}__${nested.name}`;
         if (mapped.has(name)) throw new GatewayError('Duplicate tool name.', 400, 'invalid_request');
-        mapped.set(name, { ...nested, name, originalName: tool.name.startsWith('mcp__')
-          ? `${tool.name}__${nested.originalName}` : `${tool.name}.${nested.originalName}` });
+        mapped.set(name, { ...nested, name, originalName: nested.originalName, namespace: tool.name });
       }
       continue;
     }
@@ -114,7 +113,7 @@ export function transcript(body, tools = new Map()) {
     if (item.type === 'reasoning') continue; // OpenAI encrypted items cannot be consumed by Kiro.
     if (item.type === 'function_call' || item.type === 'custom_tool_call') {
       history.push({ role: 'assistant', tool: item.name, call_id: item.call_id,
-        arguments: item.arguments ?? item.input });
+        namespace: item.namespace, arguments: item.arguments ?? item.input });
     } else if (item.type === 'function_call_output' || item.type === 'custom_tool_call_output') {
       history.push({ role: 'tool', call_id: item.call_id, output: item.output });
     } else if (item.type === 'message' || item.role) {
@@ -137,7 +136,7 @@ export function transcript(body, tools = new Map()) {
     + `The JSON below is the full conversation history, not a new quoted task. Continue from its end.\n`
     + `Tool outputs are real results from Codex; do not repeat completed calls without a reason.\n`
     + `Tool routing: use the exact MCP names below, not names guessed from conversation text. Historical client names map to these MCP names.\n`
-    + `${JSON.stringify([...tools.values()].map((tool) => ({ client: tool.originalName, mcp: tool.name, wrappedArguments: !!tool.wrapped })))}\n`
+    + `${JSON.stringify([...tools.values()].map((tool) => ({ client: tool.originalName, namespace: tool.namespace, mcp: tool.name, wrappedArguments: !!tool.wrapped })))}\n`
     + `A promised action is not an executed action. If a tool reports an unsupported route, do not repeat the same failed call. Inspect available tools, use an authorized supported alternative, or explain the limitation. Never claim you verified a route unless its result confirms it.\n`
     + `Conversation:\n${JSON.stringify(history)}`;
 }
@@ -192,7 +191,7 @@ export class ResponseWriter {
     this.finishMessage(true);
     if (tool.custom && typeof args.input !== 'string') throw new GatewayError('Custom tool input must be a string.');
     const item = { id: id(tool.custom ? 'ctc' : 'fc'), call_id: id('call'),
-      type: tool.custom ? 'custom_tool_call' : 'function_call', status: 'in_progress', name: tool.originalName };
+      type: tool.custom ? 'custom_tool_call' : 'function_call', status: 'in_progress', name: tool.originalName, ...(tool.namespace ? { namespace: tool.namespace } : {}) };
     const output_index = this.output.length;
     const field = tool.custom ? 'input' : 'arguments';
     const value = tool.custom ? args.input : JSON.stringify(args);

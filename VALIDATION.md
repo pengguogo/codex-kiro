@@ -58,3 +58,11 @@ Codex 显示的 token 使用量为 0，是网关没有 Kiro token 计数时的�
 用户确认使用 NO_PROXY/no_proxy 启动脚本后桌面 Kiro 调用成功。桌面启动与基本文本调用通过；不将此结果扩展为所有模型推理、原厂能力或复杂长任务均已通过。
 
 工具循环根因已查证：受影响会话中 mcp__cua_repl.js 调用了29次，Codex 每次返回 unsupported call。mapTools 将所有 namespace 回映射成 namespace.tool，MCP namespace 实际需要 mcp__server__tool 格式。修正仅 MCP 前缀命名空间，保留普通命名空间的点号路由；新增回归测试。
+
+## 2026-10-13 本地工作区读取与 namespace 修正
+
+实际会话记录显示 MCP 工具返回 unsupported call，而未尝试本地终端读取，不能据此认定 hkid 访问被拒绝。此前仅改分隔符的修正不完整：Codex ResponseItem FunctionCall 要求 name 和 namespace 分开传递。修正 mapTools 和 ResponseWriter 为叶子 name + 独立 namespace，并保留历史 namespace。21项测试通过，包含实际网关输出字段回归。
+
+用个人完整配置、桌面捆绑 app-server、kiro/gpt-5.6-sol 在 /Users/USER/Desktop/hkid 做只读验收：产生真实 commandExecution 事件，执行 pwd 和 ls -d .，返回工作区路径及退出码0；未修改项目文件。这证明本地工作区终端访问可用，不代表所有 MCP 插件操作均已实测。
+
+协议来源：https://github.com/openai/codex/blob/main/codex-rs/protocol/src/models.rs

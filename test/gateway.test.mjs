@@ -139,7 +139,7 @@ test('unsupported image, previous response and tool types fail before upstream c
 
 test('namespace tool names map back; encrypted reasoning is omitted', () => {
   const tools = mapTools([{ type: 'namespace', name: 'functions', tools: [execTool] }]);
-  assert.equal(tools.get('functions__exec_command').originalName, 'functions.exec_command');
+  assert.equal(tools.get('functions__exec_command').originalName, 'exec_command');
   const text = transcript({ input: [{ type: 'reasoning', encrypted_content: 'secret' }, { role: 'user', content: 'hi' }] });
   assert.ok(!text.includes('secret'));
   assert.throws(() => validateRequest({ input: 'x', store: true }), /stateless/);
@@ -189,16 +189,28 @@ test('history includes exact MCP routing for namespaced tools and failure recove
     { type: 'function', name: 'inspect', parameters: { type: 'object', properties: {} } },
   ] }]);
   const text = transcript({ input: 'Inspect the available surface' }, tools);
-  assert.match(text, /"client":"computer.inspect","mcp":"computer__inspect"/);
+  assert.match(text, /"client":"inspect","namespace":"computer","mcp":"computer__inspect"/);
   assert.match(text, /do not repeat the same failed call/);
 });
 
 
-test('MCP namespaces retain Codex double-underscore route names', () => {
+test('MCP namespaces retain separate Codex name and namespace', () => {
   const tools = mapTools([{ type: 'namespace', name: 'mcp__cua_repl', tools: [
     { type: 'function', name: 'js', parameters: { type: 'object', properties: {} } },
   ] }]);
   const tool = tools.get('mcp__cua_repl__js');
-  assert.equal(tool.originalName, 'mcp__cua_repl__js');
+  assert.equal(tool.originalName, 'js');
+  assert.equal(tool.namespace, 'mcp__cua_repl');
   assert.notEqual(tool.originalName, 'mcp__cua_repl.js');
+});
+
+
+test('Responses function calls emit namespace separately for Codex routing', async (t) => {
+  const { post } = await gateway(t);
+  const response = await post({input:'tool please',tools:[{type:'namespace',name:'functions',tools:[execTool]}]});
+  const body = await response.json();
+  const call = body.output.find((item) => item.type === 'function_call');
+  assert.ok(call, JSON.stringify(body));
+  assert.equal(call.name, 'exec_command');
+  assert.equal(call.namespace, 'functions');
 });

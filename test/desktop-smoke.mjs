@@ -106,12 +106,18 @@ try {
     assert.equal(personal.modelProvider, 'openai');
     console.log('Personal thread provider preserved (no inference request sent).');
   }
-  const thread = await call('thread/start', { cwd: workspace, ephemeral: true,
+  const thread = await call('thread/start', { cwd: process.env.KIRO_SMOKE_READONLY_CWD || workspace, ephemeral: true,
     ...(process.env.KIRO_SMOKE_PROVIDER ? { modelProvider: provider, model, config: { web_search: 'disabled' } } : {}),
-    approvalPolicy: 'never', sandbox: 'workspace-write' });
+    approvalPolicy: 'never', sandbox: process.env.KIRO_SMOKE_READONLY_CWD ? 'read-only' : 'workspace-write' });
   console.log(`provider=${thread.modelProvider} model=${thread.model}`);
   assert.equal(thread.modelProvider, provider);
   assert.equal(thread.model, model);
+  if (process.env.KIRO_SMOKE_READONLY_CWD) {
+    await turn(thread.thread.id, '这是本地工作区读取验收。必须使用实际的本地终端工具执行 pwd 和 ls -d .，输出真实结果。不要使用 MCP 资源列表或 GitHub，不修改文件。');
+    assert.ok(toolTypes.includes('commandExecution'), 'No actual local command execution event');
+    assert.ok(messages.some((text) => text.includes(process.env.KIRO_SMOKE_READONLY_CWD)), 'Actual workspace path missing');
+    console.log('PASS: real desktop backend executed read-only local workspace command.');
+  } else {
   await turn(thread.thread.id, '只回复 desktop-kiro-ok，不要调用工具。');
   assert.ok(messages.some((text) => /\bdesktop-kiro-ok\b/.test(text)), `Expected marker missing; received ${JSON.stringify(messages)}`);
   writeFileSync(join(workspace, 'backend-answer.txt'), 'before\n');
@@ -120,6 +126,7 @@ try {
   assert.ok(toolTypes.includes('fileChange'), 'No fileChange event from desktop backend');
   assert.ok(toolTypes.includes('commandExecution'), 'No commandExecution event from desktop backend');
   console.log('PASS: 桌面内置 app-server → Kiro，文本、连续聊天、apply_patch、exec_command 均通过。');
+  }
   console.log(JSON.stringify({ toolTypes, finalMessage: messages.at(-1) }));
 } catch (error) {
   console.error(error.message);
