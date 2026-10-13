@@ -138,8 +138,8 @@ export function createGateway({ key, command = 'kiro-cli', args = ['acp', '--age
         if (!session?.sessionId) throw new GatewayError('ACP returned no sessionId.');
         if (selectedModel !== 'auto') {
           const available = session.models?.availableModels;
-          if (!Array.isArray(available)) throw new GatewayError('Kiro returned no model catalogue.', 502, 'model_catalog_unavailable');
-          if (!available.some((model) => model.modelId === selectedModel)) {
+          // A transient catalogue omission must not prevent explicit upstream validation.
+          if (Array.isArray(available) && available.length && !available.some((model) => model.modelId === selectedModel)) {
             throw new GatewayError(`Unknown model: ${selectedModel}. Refresh /v1/models.`, 400, 'unknown_model');
           }
           await client.call('session/set_model', { sessionId: session.sessionId, modelId: selectedModel });

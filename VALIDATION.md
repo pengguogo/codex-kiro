@@ -66,3 +66,5 @@ Codex 显示的 token 使用量为 0，是网关没有 Kiro token 计数时的�
 用个人完整配置、桌面捆绑 app-server、kiro/gpt-5.6-sol 在 /Users/USER/Desktop/hkid 做只读验收：产生真实 commandExecution 事件，执行 pwd 和 ls -d .，返回工作区路径及退出码0；未修改项目文件。这证明本地工作区终端访问可用，不代表所有 MCP 插件操作均已实测。
 
 协议来源：https://github.com/openai/codex/blob/main/codex-rs/protocol/src/models.rs
+
+2026-10-13 session/new 曾缺失模型目录；实时探测 Kiro CLI 2.30.0 已正常返回21项，持续故障未复现。推理入口改为目录暂缺时依旧调用 session/set_model 显式校验所选模型，切换成功才推理，拒绝仍报错，无自动降级。新增目录缺失时成功/拒绝回归测试，23项通过。

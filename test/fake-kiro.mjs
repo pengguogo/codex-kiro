@@ -14,10 +14,10 @@ createInterface({ input: process.stdin }).on('line', async (line) => {
   else if (msg.method === 'session/new') {
     mcp = msg.params.mcpServers[0];
     if (mcp) await callMcp('initialize', { protocolVersion: '2024-11-05' });
-    send({ id: msg.id, result: { sessionId: sid, models: { currentModelId: 'auto', availableModels: [
+    send({ id: msg.id, result: { sessionId: sid, ...(process.argv.includes('--no-catalogue') ? {} : { models: { currentModelId: 'auto', availableModels: [
       { modelId: 'auto', name: 'Auto' }, { modelId: 'claude-test', name: 'Claude Test' },
       { modelId: 'gpt-test', name: 'GPT Test' },
-    ] } } });
+    ] } }) } });
   } else if (msg.method === 'session/set_model') {
     if (msg.params.modelId.startsWith('kiro/')) throw new Error('Public prefix leaked to Kiro');
     if (msg.params.modelId === 'bad-model') send({ id: msg.id, error: { code: -32602, message: 'Unknown model' } });

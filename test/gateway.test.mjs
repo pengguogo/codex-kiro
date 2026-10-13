@@ -222,3 +222,14 @@ test('local workspace guidance distinguishes actual restrictions from historical
   assert.match(text, /Honor real user\/developer restrictions/);
   assert.match(text, /never invent a shell prohibition/);
 });
+
+
+test('missing session catalogue still validates explicit model upstream', async (t) => {
+  const { post } = await gateway(t, { args: [fake, '--no-catalogue'] });
+  const ok = await post({ model: 'kiro/claude-test', input: 'hello' });
+  assert.equal(ok.status, 200);
+  assert.equal((await ok.json()).model, 'kiro/claude-test');
+  const bad = await post({ model: 'kiro/bad-model', input: 'hello' });
+  assert.equal(bad.status, 502);
+  assert.match((await bad.json()).error.message, /Unknown model/);
+});
